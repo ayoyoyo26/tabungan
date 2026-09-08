@@ -896,36 +896,39 @@
 
             <!-- DASHBOARD -->
             <section class="section active" id="page-dashboard">
+                <!-- Stats Grid -->
                 <div class="stats-grid" id="statsGrid">
-                    <div class="stat-card primary">
+                    <div class="stat-card primary" id="cardTotalStudents">
                         <div class="stat-icon"><i class="fas fa-users"></i></div>
                         <div class="stat-label">Total Siswa</div>
                         <div class="stat-value" id="totalStudents">0</div>
                     </div>
-                    <div class="stat-card success">
+                    <div class="stat-card success" id="cardTotalSavings">
                         <div class="stat-icon"><i class="fas fa-coins"></i></div>
                         <div class="stat-label">Total Tabungan</div>
                         <div class="stat-value" id="totalSavings">Rp 0</div>
                     </div>
-                    <div class="stat-card warning">
+                    <div class="stat-card warning" id="cardTotalTransactions">
                         <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
                         <div class="stat-label">Total Transaksi</div>
                         <div class="stat-value" id="totalTransactions">0</div>
                         <div class="stat-sub">hari ini: <span id="todayTransactions">0</span></div>
                     </div>
-                    <div class="stat-card purple">
+                    <div class="stat-card purple" id="cardAvg">
                         <div class="stat-icon"><i class="fas fa-trophy"></i></div>
                         <div class="stat-label">Rata-rata / Siswa</div>
                         <div class="stat-value" id="avgPerStudent">Rp 0</div>
                     </div>
                 </div>
 
-                <div style="background:#fff;border-radius:16px;padding:20px 24px;border:1px solid #e2e8f0;margin-bottom:24px;">
+                <!-- Ringkasan per Hari (sembunyikan untuk siswa) -->
+                <div id="daySummaryContainer" style="background:#fff;border-radius:16px;padding:20px 24px;border:1px solid #e2e8f0;margin-bottom:24px;">
                     <h4 style="font-size:16px;font-weight:700;margin-bottom:12px;"><i class="fas fa-chart-bar" style="color:#facc15;margin-right:8px;"></i>Ringkasan per Hari (Senin–Jumat)</h4>
                     <div class="day-summary-grid" id="daySummaryGrid"></div>
                 </div>
 
-                <div style="background:#fff;border-radius:16px;padding:20px 24px;border:1px solid #e2e8f0;">
+                <!-- Transaksi Terbaru (sembunyikan untuk siswa) -->
+                <div id="recentContainer" style="background:#fff;border-radius:16px;padding:20px 24px;border:1px solid #e2e8f0;">
                     <h4 style="font-size:16px;font-weight:700;margin-bottom:12px;"><i class="fas fa-clock" style="color:#facc15;margin-right:8px;"></i>Transaksi Terbaru</h4>
                     <div class="table-scroll">
                         <table>
@@ -1141,7 +1144,7 @@
             };
 
             // ---------- KONFIGURASI TOKEN ADMIN ----------
-            const ADMIN_TOKEN = 'admin123'; // Token yang harus dimasukkan admin
+            const ADMIN_TOKEN = 'admin123';
 
             let students = [];
             let savings = [];
@@ -1181,7 +1184,6 @@
                 } catch (_) { /* ignore */ }
                 if (!Array.isArray(students)) students = [];
                 if (!Array.isArray(savings)) savings = [];
-                // Ensure every student has a password field (default = nis)
                 students.forEach(st => {
                     if (!st.password) st.password = st.nis;
                 });
@@ -1227,7 +1229,7 @@
             }
 
             // ---------- CURRENT USER ----------
-            let currentUser = null; // { role: 'admin' | 'siswa', studentId: number | null, name: string }
+            let currentUser = null;
 
             function isAdmin() {
                 return currentUser && currentUser.role === 'admin';
@@ -1261,6 +1263,7 @@
                     todayTransactions = mySavings.filter(sv => sv.date === todayStr).length;
                 }
 
+                // Update semua nilai
                 $('#totalStudents').textContent = totalStudents;
                 $('#totalSavings').textContent = formatRupiah(totalSavings);
                 $('#totalTransactions').textContent = totalTransactions;
@@ -1268,7 +1271,35 @@
                 const avg = totalStudents > 0 ? Math.round(totalSavings / totalStudents) : 0;
                 $('#avgPerStudent').textContent = formatRupiah(avg);
 
-                // Day summary
+                // Sembunyikan/tampilkan elemen berdasarkan role
+                const isAdminUser = isAdmin();
+                // Card: hanya card total tabungan yang tampil untuk siswa
+                const cards = document.querySelectorAll('.stat-card');
+                cards.forEach(card => {
+                    if (isAdminUser) {
+                        card.style.display = '';
+                    } else {
+                        // Siswa: hanya card dengan id 'cardTotalSavings' yang tampil
+                        if (card.id === 'cardTotalSavings') {
+                            card.style.display = '';
+                        } else {
+                            card.style.display = 'none';
+                        }
+                    }
+                });
+
+                // Sembunyikan ringkasan per hari dan transaksi terbaru untuk siswa
+                const dayContainer = document.getElementById('daySummaryContainer');
+                const recentContainer = document.getElementById('recentContainer');
+                if (isAdminUser) {
+                    dayContainer.style.display = '';
+                    recentContainer.style.display = '';
+                } else {
+                    dayContainer.style.display = 'none';
+                    recentContainer.style.display = 'none';
+                }
+
+                // Day summary (tetap dihitung, tapi hanya untuk admin)
                 const dayGrid = $('#daySummaryGrid');
                 dayGrid.innerHTML = '';
                 let dataForDays = savings;
@@ -1289,7 +1320,7 @@
                     dayGrid.appendChild(div);
                 }
 
-                // Recent transactions
+                // Recent transactions (hanya untuk admin)
                 const tbody = $('#recentTransactions');
                 let recent = [];
                 if (isAdmin()) {
@@ -1699,18 +1730,16 @@
                 const appContainer = $('#appContainer');
 
                 if (isLoggedIn) {
-                    // Cek token admin jika role admin
                     const role = localStorage.getItem('userRole') || 'admin';
                     const storedToken = localStorage.getItem('adminToken');
                     if (role === 'admin' && storedToken !== ADMIN_TOKEN) {
-                        // Token tidak valid, logout otomatis
                         localStorage.removeItem('isLoggedIn');
                         localStorage.removeItem('userRole');
                         localStorage.removeItem('userName');
                         localStorage.removeItem('studentId');
                         localStorage.removeItem('adminToken');
                         showToast('Sesi admin tidak valid, silakan login ulang', 'error');
-                        checkLogin(); // panggil ulang untuk update UI
+                        checkLogin();
                         return;
                     }
 
@@ -1756,7 +1785,7 @@
                         showToast('Login gagal! Periksa username, password, dan token.', 'error');
                         return;
                     }
-                } else { // siswa
+                } else {
                     const nis = $('#loginNis').value.trim();
                     if (!nis) {
                         errorEl.textContent = 'Masukkan NIS';
@@ -1770,7 +1799,6 @@
                         localStorage.setItem('userRole', 'siswa');
                         localStorage.setItem('userName', student.name);
                         localStorage.setItem('studentId', String(student.id));
-                        // Hapus token admin jika ada
                         localStorage.removeItem('adminToken');
                         checkLogin();
                         showToast(`Selamat datang, ${student.name}!`, 'success');
@@ -1782,10 +1810,6 @@
                         return;
                     }
                 }
-
-                errorEl.textContent = 'Username atau password salah!';
-                errorEl.classList.add('show');
-                showToast('Username atau password salah!', 'error');
             }
 
             function doLogout() {
@@ -1824,14 +1848,10 @@
 
             // ---------- INIT ----------
             function init() {
-                // Event listeners untuk login
                 $('#loginRole').addEventListener('change', toggleLoginFields);
                 $('#loginForm').addEventListener('submit', doLogin);
-
-                // Logout
                 $('#logoutBtn').addEventListener('click', doLogout);
 
-                // Sidebar navigation
                 document.querySelectorAll('.sidebar-menu a[data-page]').forEach(link => {
                     link.addEventListener('click', function(e) {
                         e.preventDefault();
@@ -1840,12 +1860,10 @@
                     });
                 });
 
-                // Hamburger
                 $('#hamburgerBtn').addEventListener('click', function() {
                     document.getElementById('sidebar').classList.toggle('open');
                 });
 
-                // Modal close
                 document.querySelectorAll('[data-close]').forEach(btn => {
                     btn.addEventListener('click', function() {
                         closeModal(this.dataset.close);
@@ -1859,13 +1877,11 @@
                     });
                 });
 
-                // Add Saving
                 $('#btnAddSaving').addEventListener('click', function() {
                     resetSavingForm();
                     openModal('modalSaving');
                 });
 
-                // Saving form submit
                 $('#formSaving').addEventListener('submit', function(e) {
                     e.preventDefault();
                     const editId = $('#savingEditId').value;
@@ -1906,7 +1922,6 @@
                     renderAll();
                 });
 
-                // Add Student (hanya admin)
                 $('#btnAddStudent').addEventListener('click', function() {
                     if (!isAdmin()) {
                         showToast('Hanya admin yang dapat mengelola siswa', 'error');
@@ -1916,7 +1931,6 @@
                     openModal('modalStudent');
                 });
 
-                // Student form submit (hanya admin)
                 $('#formStudent').addEventListener('submit', function(e) {
                     e.preventDefault();
                     if (!isAdmin()) {
@@ -1954,27 +1968,19 @@
                     renderAll();
                 });
 
-                // Report filter
                 $('#btnApplyReport').addEventListener('click', function() {
                     const student = $('#reportFilterStudent').value;
                     const day = $('#reportFilterDay').value;
                     renderReport(student, day);
                 });
 
-                // Export CSV
                 $('#btnExportCSV').addEventListener('click', exportCSV);
-
-                // Reset All (hanya admin)
                 $('#btnResetAll').addEventListener('click', resetAllData);
 
-                // Initial toggle login fields
                 toggleLoginFields();
-
-                // Check login status
                 checkLogin();
             }
 
-            // Run init
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', init);
             } else {
