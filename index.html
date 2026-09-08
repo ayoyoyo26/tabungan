@@ -839,6 +839,10 @@
                     <label>Username</label>
                     <input type="text" class="form-control" id="loginUsername" placeholder="admin" required />
                 </div>
+                <div class="form-group" id="adminTokenField" style="display:none;">
+                    <label>Token Admin</label>
+                    <input type="text" class="form-control" id="loginToken" placeholder="Masukkan token admin" />
+                </div>
                 <div class="form-group" id="siswaFields" style="display:none;">
                     <label>NIS</label>
                     <input type="text" class="form-control" id="loginNis" placeholder="Masukkan NIS" />
@@ -1136,6 +1140,9 @@
                 5: 'friday'
             };
 
+            // ---------- KONFIGURASI TOKEN ADMIN ----------
+            const ADMIN_TOKEN = 'admin123'; // Token yang harus dimasukkan admin
+
             let students = [];
             let savings = [];
             let nextStudentId = 1;
@@ -1252,7 +1259,6 @@
                     totalSavings = mySavings.reduce((sum, sv) => sum + sv.amount, 0);
                     totalTransactions = mySavings.length;
                     todayTransactions = mySavings.filter(sv => sv.date === todayStr).length;
-                    // Untuk siswa, total siswa dan rata-rata tetap semua siswa (atau bisa disesuaikan)
                 }
 
                 $('#totalStudents').textContent = totalStudents;
@@ -1359,7 +1365,6 @@
                         });
                     });
                 } else {
-                    // Untuk siswa, sembunyikan kolom aksi
                     document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
                 }
             }
@@ -1416,7 +1421,6 @@
                 let filtered = [...savings];
                 if (isSiswa()) {
                     filtered = filtered.filter(sv => sv.studentId === getCurrentStudentId());
-                    // Override filter student untuk siswa
                     filterStudent = 'all';
                 }
                 if (filterStudent !== 'all') {
@@ -1467,7 +1471,6 @@
                         if (id === 'reportFilterStudent') sel.value = 'all';
                         else sel.value = '';
                     }
-                    // Jika siswa, disable dropdown dan set otomatis
                     if (isSiswa() && id === 'savingStudentId') {
                         sel.disabled = true;
                         if (students.length > 0) {
@@ -1481,25 +1484,19 @@
 
             function adjustUIForRole() {
                 const isAdminUser = isAdmin();
-                // Tampilkan/sembunyikan menu sidebar
                 document.querySelectorAll('.sidebar-menu li.hidden-for-siswa').forEach(el => {
                     el.style.display = isAdminUser ? 'block' : 'none';
                 });
 
-                // Tampilkan/sembunyikan tombol tambah siswa
                 const btnAddStudent = $('#btnAddStudent');
                 if (btnAddStudent) {
                     btnAddStudent.style.display = isAdminUser ? 'flex' : 'none';
                 }
 
-                // Sembunyikan kolom aksi di tabel tabungan untuk siswa
                 document.querySelectorAll('.admin-only').forEach(el => {
                     el.style.display = isAdminUser ? '' : 'none';
                 });
 
-                // Untuk siswa, kita juga bisa menyembunyikan menu Laporan dan Siswa di sidebar sudah diatur.
-
-                // Jika siswa mencoba mengakses halaman students atau reports, arahkan ke dashboard
                 const currentPage = document.querySelector('.section.active');
                 if (currentPage) {
                     const pageId = currentPage.id;
@@ -1514,11 +1511,9 @@
                 renderSavingsTable();
                 renderStudentsTable();
                 populateStudentSelects();
-                // Report filter
                 const filterStudent = $('#reportFilterStudent').value;
                 const filterDay = $('#reportFilterDay').value;
                 renderReport(filterStudent, filterDay);
-                // Update report student dropdown
                 const repSel = $('#reportFilterStudent');
                 const curVal = repSel.value;
                 repSel.innerHTML = `<option value="all">Semua Siswa</option>`;
@@ -1549,7 +1544,6 @@
 
             // ---------- NAVIGATION ----------
             function navigateTo(page) {
-                // Cek akses
                 if (!isAdmin() && (page === 'students' || page === 'reports')) {
                     showToast('Anda tidak memiliki akses ke halaman ini', 'error');
                     return;
@@ -1599,7 +1593,6 @@
                     $('#savingDay').value = 1;
                 }
                 populateStudentSelects();
-                // Jika siswa, set studentId otomatis dan disable
                 if (isSiswa()) {
                     const sel = $('#savingStudentId');
                     if (students.length > 0) {
@@ -1706,11 +1699,25 @@
                 const appContainer = $('#appContainer');
 
                 if (isLoggedIn) {
+                    // Cek token admin jika role admin
+                    const role = localStorage.getItem('userRole') || 'admin';
+                    const storedToken = localStorage.getItem('adminToken');
+                    if (role === 'admin' && storedToken !== ADMIN_TOKEN) {
+                        // Token tidak valid, logout otomatis
+                        localStorage.removeItem('isLoggedIn');
+                        localStorage.removeItem('userRole');
+                        localStorage.removeItem('userName');
+                        localStorage.removeItem('studentId');
+                        localStorage.removeItem('adminToken');
+                        showToast('Sesi admin tidak valid, silakan login ulang', 'error');
+                        checkLogin(); // panggil ulang untuk update UI
+                        return;
+                    }
+
                     loginPage.classList.add('hidden');
                     appContainer.classList.add('visible');
-                    const role = localStorage.getItem('userRole') || 'admin';
-                    const studentId = localStorage.getItem('studentId') ? parseInt(localStorage.getItem('studentId'), 10) : null;
                     const name = localStorage.getItem('userName') || 'Admin';
+                    const studentId = localStorage.getItem('studentId') ? parseInt(localStorage.getItem('studentId'), 10) : null;
                     currentUser = { role, studentId, name };
                     $('#userNameDisplay').textContent = name;
                     loadData();
@@ -1732,14 +1739,21 @@
 
                 if (role === 'admin') {
                     const username = $('#loginUsername').value.trim();
-                    if (username === 'admin' && password === 'admin') {
+                    const token = $('#loginToken').value.trim();
+                    if (username === 'admin' && password === 'admin' && token === ADMIN_TOKEN) {
                         errorEl.classList.remove('show');
                         localStorage.setItem('isLoggedIn', 'true');
                         localStorage.setItem('userRole', 'admin');
                         localStorage.setItem('userName', 'Admin');
+                        localStorage.setItem('adminToken', ADMIN_TOKEN);
                         localStorage.removeItem('studentId');
                         checkLogin();
                         showToast('Login Admin berhasil!', 'success');
+                        return;
+                    } else {
+                        errorEl.textContent = 'Username, password, atau token salah!';
+                        errorEl.classList.add('show');
+                        showToast('Login gagal! Periksa username, password, dan token.', 'error');
                         return;
                     }
                 } else { // siswa
@@ -1756,6 +1770,8 @@
                         localStorage.setItem('userRole', 'siswa');
                         localStorage.setItem('userName', student.name);
                         localStorage.setItem('studentId', String(student.id));
+                        // Hapus token admin jika ada
+                        localStorage.removeItem('adminToken');
                         checkLogin();
                         showToast(`Selamat datang, ${student.name}!`, 'success');
                         return;
@@ -1777,6 +1793,7 @@
                 localStorage.removeItem('userRole');
                 localStorage.removeItem('userName');
                 localStorage.removeItem('studentId');
+                localStorage.removeItem('adminToken');
                 currentUser = null;
                 checkLogin();
                 showToast('Anda telah logout', 'success');
@@ -1786,16 +1803,21 @@
             function toggleLoginFields() {
                 const role = $('#loginRole').value;
                 const adminFields = $('#adminFields');
+                const adminTokenField = $('#adminTokenField');
                 const siswaFields = $('#siswaFields');
                 if (role === 'admin') {
                     adminFields.style.display = 'block';
+                    adminTokenField.style.display = 'block';
                     siswaFields.style.display = 'none';
                     $('#loginUsername').required = true;
+                    $('#loginToken').required = true;
                     $('#loginNis').required = false;
                 } else {
                     adminFields.style.display = 'none';
+                    adminTokenField.style.display = 'none';
                     siswaFields.style.display = 'block';
                     $('#loginUsername').required = false;
+                    $('#loginToken').required = false;
                     $('#loginNis').required = true;
                 }
             }
@@ -1853,7 +1875,6 @@
                     const amount = parseInt($('#savingAmount').value, 10);
                     const notes = $('#savingNotes').value.trim();
 
-                    // Jika siswa, pastikan studentId sesuai dengan dirinya sendiri
                     if (isSiswa()) {
                         studentId = getCurrentStudentId();
                     }
